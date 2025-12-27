@@ -63,16 +63,20 @@ def build_training_dataframe(year=2024):
     if not df_list:
         raise RuntimeError("No session data collected for the season.")
 
-    df_all = pd.concat(df_list, ignore_index=True)  # combine all races [web:143]
+    df_all = pd.concat(df_list, ignore_index=True)
 
-    # Encode categorical
+
     columns_to_encode = ["Compound"]
     encoder = OrdinalEncoder(categories=[["HARD", "MEDIUM", "SOFT"]])
     df_all[columns_to_encode] = encoder.fit_transform(df_all[columns_to_encode])
 
     feature_cols = ["LapTime", "Compound", "AirTemp"]
     X = df_all[feature_cols].copy()
-    y = df_all["GridPosition"].astype(int)
+
+    bins = [0, 6, 14, 20]
+    labels = [0, 1, 2]
+    y = pd.cut(df_all["GridPosition"], bins=bins, labels=labels, include_lowest=True).astype(int)
+
 
     X = X.fillna(0)
 
