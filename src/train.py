@@ -8,13 +8,26 @@ import joblib
 from pathlib import Path
 
 
-def load_session(year=2024, gp="Qatar", session_type="R"):
-    session = fastf1.get_session(year, gp, session_type)
-    session.load()
-    return session
+def load_season_sessions(year=2024):
+    """Return a list of race sessions (all GPs in a season)."""
+    schedule = fastf1.get_event_schedule(year)  # full season calendar [web:119]
+    sessions = []
+
+    for _, event in schedule.iterrows():
+        if event["EventName"] is None:
+            continue  # skip tests etc.
+        try:
+            session = fastf1.get_session(year, event["EventName"], "R")
+            session.load()
+            sessions.append(session)
+        except Exception:
+            # If a race fails to load for any reason, skip it
+            continue
+
+    return sessions
 
 
-def build_training_dataframe(session):
+def build_training_dataframe_for_session(session):
     laps = session.laps
     weather = session.weather_data
 
@@ -36,53 +49,60 @@ def build_training_dataframe(session):
     # Convert LapTime to seconds
     df["LapTime"] = df["LapTime"].dt.total_seconds()
 
+    return df
+
+
+def build_training_dataframe(year=2024):
+    sessions = load_season_sessions(year)
+    df_list = []
+
+    for session in sessions:
+        df_session = build_training_dataframe_for_session(session)
+        df_list.append(df_session)
+
+    if not df_list:
+        raise RuntimeError("No session data collected for the season.")
+
+    df_all = pd.concat(df_list, ignore_index=True)  # combine all races [web:143]
+
     # Encode categorical
     columns_to_encode = ["Compound"]
     encoder = OrdinalEncoder(categories=[["HARD", "MEDIUM", "SOFT"]])
-    df[columns_to_encode] = encoder.fit_transform(df[columns_to_encode])
+    df_all[columns_to_encode] = encoder.fit_transform(df_all[columns_to_encode])
 
-    # Features and target
     feature_cols = ["LapTime", "Compound", "AirTemp"]
-    X = df[feature_cols].copy()
-    y = df["GridPosition"].astype(int)
+    X = df_all[feature_cols].copy()
+    y = df_all["GridPosition"].astype(int)
 
     X = X.fillna(0)
 
-    return X, y, encoder, feature_cols, df
+    return X, y, encoder, feature_cols, df_all
 
 
 def train_model():
-    session = load_session()
-    X, y, encoder, feature_cols, df = build_training_dataframe(session)
+    X, y, encoder, feature_cols, df_all = build_training_dataframe(year=2024)
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.3, random_state=42, stratify=y
     )
 
-    # Multinomial logistic regression for multi‑class grid positions
     model = LogisticRegression(
-        multi_class="multinomial",
+        multi_class="multinomial",  # remove if your sklearn is too old
         solver="lbfgs",
         max_iter=1000,
-        n_jobs=-1,
     )
-<<<<<<< HEAD
 
-=======
->>>>>>> 21d6140 (Add logistic regression model and Streamlit UI wiring)
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     print(f"Validation accuracy: {acc:.3f}")
 
-    # Build a small prediction table for inspection (optional)
     x_test_with_id = X_test.copy()
-    x_test_with_id["Abbreviation"] = df.loc[X_test.index, "Abbreviation"]
+    x_test_with_id["Abbreviation"] = df_all.loc[X_test.index, "Abbreviation"]
     pred_table = x_test_with_id[["Abbreviation"]].copy()
     pred_table["predicted_grid"] = y_pred
     print(pred_table.head(20))
 
-    # Save model and encoder
     models_dir = Path("models")
     models_dir.mkdir(parents=True, exist_ok=True)
 
@@ -95,4 +115,3 @@ def train_model():
 
 if __name__ == "__main__":
     train_model()
-
