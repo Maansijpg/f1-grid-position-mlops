@@ -66,7 +66,10 @@ def train_model():
         max_iter=1000,
         n_jobs=-1,
     )
+<<<<<<< HEAD
 
+=======
+>>>>>>> 21d6140 (Add logistic regression model and Streamlit UI wiring)
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
