@@ -1,4 +1,10 @@
+import sys
+from pathlib import Path
 import streamlit as st
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))
+
 from src.predict import predict_grid
 
 st.set_page_config(page_title="F1 Grid Predictor")
