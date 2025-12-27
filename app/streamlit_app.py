@@ -4,7 +4,7 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))
-
+from src.predict import prepare_features
 from src.predict import predict_grid
 
 st.set_page_config(page_title="F1 Grid Predictor")
@@ -34,6 +34,11 @@ air_temp = st.number_input(
 )
 
 if st.button("Predict grid position"):
-    grid = predict_grid(lap_time, compound, air_temp)
-    st.success(f"Predicted grid position: {grid}")
+    predicted_grid = prepare_features(
+        compound=selected_compound,
+        lap_time_seconds=lap_time_seconds,
+        air_temp=air_temp_value,
+    )
+    st.success(f"Predicted grid position: {predicted_grid}")
+
 

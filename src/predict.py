@@ -1,31 +1,44 @@
-from pathlib import Path
-import joblib
+import numpy as np
 import pandas as pd
-
-# Path to the saved model (relative to repo root)
-MODEL_PATH = Path("data/models/f1_grid_xgb.joblib")
-
-# Load model once at import time
-_model = joblib.load(MODEL_PATH)
+import joblib
+from pathlib import Path
 
 
-def predict_grid(lap_time_sec: float, compound: str, air_temp: float) -> int:
+MODELS_DIR = Path("models")
+MODEL_PATH = MODELS_DIR / "f1_grid_logreg.joblib"
+PREPROCESS_PATH = MODELS_DIR / "preprocess_logreg.joblib"
+
+
+def load_artifacts():
+    model = joblib.load(MODEL_PATH)
+    preprocess = joblib.load(PREPROCESS_PATH)
+    encoder = preprocess["encoder"]
+    feature_cols = preprocess["feature_cols"]
+    return model, encoder, feature_cols
+
+
+def prepare_features(compound, lap_time_seconds, air_temp):
     """
-    Predict grid position given lap time (seconds), tyre compound and air temperature.
+    compound: string, one of HARD/MEDIUM/SOFT
+    lap_time_seconds: float (e.g. 94.123)
+    air_temp: float
     """
-    compound_map = {"HARD": 0, "MEDIUM": 1, "SOFT": 2}
-    compound_code = compound_map[compound]
+    model, encoder, feature_cols = load_artifacts()
 
-    X = pd.DataFrame([{
-        "LapTime": lap_time_sec,
-        "Compound_code": compound_code,
-        "AirTemp": air_temp,
-    }])
+    # Build single-row dataframe
+    df = pd.DataFrame(
+        {
+            "LapTime": [lap_time_seconds],
+            "Compound": [compound],
+            "AirTemp": [air_temp],
+        }
+    )
 
-    pred = _model.predict(X)[0]
-    return int(pred)
+    # Encode compound using the same encoder
+    df[["Compound"]] = encoder.transform(df[["Compound"]])
 
+    X = df[feature_cols].copy()
+    X = X.fillna(0)
 
-if __name__ == "__main__":
-    # quick smoke test
-    print(predict_grid(90.0, "MEDIUM", 30.0))
+    pred_grid = model.predict(X)[0]
+    return int(pred_grid)
